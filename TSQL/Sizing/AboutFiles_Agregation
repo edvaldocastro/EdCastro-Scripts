@@ -59,6 +59,7 @@ FROM #tbAboutFile
 GROUP BY
       DatabaseName
     , type_desc
+HAVING type_desc <> 'FILESTREAM'
 ORDER BY
 	  DatabaseName,
       type_desc;
