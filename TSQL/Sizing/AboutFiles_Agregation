@@ -1,0 +1,66 @@
+/* Aggregate space used and free by database and file type */
+IF OBJECT_ID('tempdb..#tbAboutFile') IS NOT NULL
+    DROP TABLE #tbAboutFile;
+
+CREATE TABLE #tbAboutFile
+(
+    [DatabaseName]        SYSNAME,
+    [FileName]            SYSNAME,
+    [type_desc]           VARCHAR(10),
+    [FileGroupName]       SYSNAME NULL,
+    [FileSizeMB]          NUMERIC(12,2),
+    [FileSpaceUsedMB]     NUMERIC(12,2),
+    [FilePercentUsed]     NUMERIC(9,2),
+    [FileFreeSpaceMB]     NUMERIC(12,2),
+    [FilePercentFree]     NUMERIC(9,2),
+    [FileGrowthMB]        NUMERIC(12,2),
+    [physical_name]       NVARCHAR(260)
+);
+GO
+
+EXEC sp_MSforeachdb '
+USE [?];
+
+INSERT INTO #tbAboutFile
+SELECT
+      DB_NAME()                                  AS [DatabaseName]
+    , df.name                                    AS [FileName]
+    , df.type_desc
+    , ds.name                                    AS [FileGroupName]
+    , CAST(df.size / 128.0 AS NUMERIC(12,2))     AS [FileSizeMB]
+    , CAST(FILEPROPERTY(df.name, ''SpaceUsed'') / 128.0 AS NUMERIC(12,2)) AS [FileSpaceUsedMB]
+    , CAST(
+         (FILEPROPERTY(df.name, ''SpaceUsed'') / 128.0) 
+         / NULLIF((df.size / 128.0), 0) * 100.0 
+      AS NUMERIC(12,2))                          AS [FilePercentUsed]
+    , CAST((df.size / 128.0) - (FILEPROPERTY(df.name, ''SpaceUsed'') / 128.0) AS NUMERIC(12,2)) AS [FileFreeSpaceMB]
+    , CAST(
+         ((df.size / 128.0) - (FILEPROPERTY(df.name, ''SpaceUsed'') / 128.0)) 
+         / NULLIF((df.size / 128.0), 0) * 100.0
+      AS NUMERIC(12,2))                          AS [FilePercentFree]
+    , CAST(df.growth / 128.0 AS NUMERIC(12,2))   AS [FileGrowthMB]
+    , df.physical_name
+FROM sys.database_files AS df
+LEFT JOIN sys.data_spaces AS ds
+  ON ds.data_space_id = df.data_space_id;
+';
+GO
+
+/* === Aggregated output: sum of used and free space grouped by database and file type === */
+SELECT
+      DatabaseName
+    , type_desc
+    , SUM(FileSizeMB)                      AS TotalFileSizeMB
+    , SUM(FileSpaceUsedMB)                 AS TotalSpaceUsedMB
+    , SUM(FileFreeSpaceMB)                 AS TotalFreeSpaceMB
+    , CAST(SUM(FileSpaceUsedMB) / NULLIF(SUM(FileSizeMB), 0) * 100.0 AS NUMERIC(12,2)) AS PercentUsed
+    , CAST(SUM(FileFreeSpaceMB) / NULLIF(SUM(FileSizeMB), 0) * 100.0 AS NUMERIC(12,2)) AS PercentFree
+FROM #tbAboutFile
+GROUP BY
+      DatabaseName
+    , type_desc
+ORDER BY
+	  DatabaseName,
+      type_desc;
+
+DROP TABLE #tbAboutFile;
