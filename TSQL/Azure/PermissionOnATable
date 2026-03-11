@@ -1,0 +1,20 @@
+SELECT
+    dp.permission_name,
+    dp.state_desc AS permission_state,
+    sch.name AS schema_name,
+    obj.name AS object_name,
+    grantee_principal.name AS grantee,
+    grantor_principal.name AS grantor,
+    grantee_principal.type_desc AS grantee_type
+FROM sys.database_permissions dp
+JOIN sys.objects obj
+    ON dp.major_id = obj.object_id
+JOIN sys.schemas sch
+    ON obj.schema_id = sch.schema_id
+JOIN sys.database_principals grantee_principal
+    ON dp.grantee_principal_id = grantee_principal.principal_id
+JOIN sys.database_principals grantor_principal
+    ON dp.grantor_principal_id = grantor_principal.principal_id
+WHERE obj.name = 'YOURTABLENAME'
+  AND sch.name = 'YOURSCHEMANAME  '
+ORDER BY grantee_principal.name, dp.permission_name;
